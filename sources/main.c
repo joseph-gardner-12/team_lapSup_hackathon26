@@ -197,12 +197,6 @@ static void SpeakDialogWithElevenLabs(const char* npcName, const char* dialogTex
     }
 }
 
-static void StopDialogVoicePlayback(void) {
-    if (isDialogVoiceLoaded) {
-        StopSound(dialogVoiceSound);
-    }
-}
-
 static void OpenDialogForNPC(const char* npcName, const char* dialogText, bool readAloud) {
     activeNPCName = npcName;
     snprintf(activeDialogText, sizeof(activeDialogText), "%s", dialogText);
@@ -576,7 +570,7 @@ int main(void)
     }
     UnloadMusicStream(bgMusic);
     if (isDialogVoiceLoaded) {
-        StopDialogVoicePlayback();
+        StopSound(dialogVoiceSound);
         UnloadSound(dialogVoiceSound);
     }
     CloseAudioDevice();
