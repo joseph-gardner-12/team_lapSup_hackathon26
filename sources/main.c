@@ -36,6 +36,10 @@ char activeDialogText[1024] = ""; // Changed to a buffer so we can write Gemini'
 const char* activeNPCName = "";
 bool isWaitingForAI = false;
 NPC* interactingNPC = NULL;
+static Sound dialogVoiceSound = { 0 };
+static bool isDialogVoiceLoaded = false;
+
+void WrapText(char *text, int maxLineWidth, int fontSize);
 
 bool IsBlockedByCollisionMask(Vector2 worldPos, const Color *maskPixels, int maskWidth, int maskHeight) {
     int x = (int)worldPos.x;
@@ -145,6 +149,71 @@ void GenerateGeminiDialog(const char* npcName, const char* itemName, char* buffe
     printf("-------------------------------\n\n");
 }
 
+static void SpeakDialogWithElevenLabs(const char* npcName, const char* dialogText) {
+    if (npcName == NULL || dialogText == NULL || dialogText[0] == '\0') {
+        return;
+    }
+
+    FILE *textFile = fopen("dialog_text.tmp", "w");
+    if (textFile == NULL) {
+        printf("ERROR: Could not create temporary dialogue file for TTS.\n");
+        return;
+    }
+    fputs(dialogText, textFile);
+    fclose(textFile);
+
+    char command[1024];
+    snprintf(command, sizeof(command), "%s assets/elevenlabs_tts.py \"%s\" \"dialog_text.tmp\" \"dialog_tts.mp3\"", PYTHON_CMD, npcName);
+
+    FILE *fp = POPEN(command, "r");
+    if (fp == NULL) {
+        printf("ERROR: Could not execute ElevenLabs TTS script.\n");
+        return;
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        printf("[ElevenLabs] %s", line);
+    }
+
+    int status = PCLOSE(fp);
+    if (status != 0 || !FileExists("dialog_tts.mp3")) {
+        printf("WARNING: ElevenLabs TTS generation failed or produced no audio file.\n");
+        return;
+    }
+
+    if (isDialogVoiceLoaded) {
+        StopSound(dialogVoiceSound);
+        UnloadSound(dialogVoiceSound);
+        isDialogVoiceLoaded = false;
+    }
+
+    dialogVoiceSound = LoadSound("dialog_tts.mp3");
+    if (dialogVoiceSound.frameCount > 0) {
+        isDialogVoiceLoaded = true;
+        PlaySound(dialogVoiceSound);
+    } else {
+        printf("WARNING: Generated dialog_tts.mp3 could not be loaded as a sound.\n");
+    }
+}
+
+static void StopDialogVoicePlayback(void) {
+    if (isDialogVoiceLoaded) {
+        StopSound(dialogVoiceSound);
+    }
+}
+
+static void OpenDialogForNPC(const char* npcName, const char* dialogText, bool readAloud) {
+    activeNPCName = npcName;
+    snprintf(activeDialogText, sizeof(activeDialogText), "%s", dialogText);
+    WrapText(activeDialogText, 560, 20);
+    isDialogOpen = true;
+
+    if (readAloud) {
+        SpeakDialogWithElevenLabs(npcName, dialogText);
+    }
+}
+
 // --- Text Wrapping Helper ---
 // Modifies a string in-place, replacing spaces with newlines to fit a maximum pixel width.
 void WrapText(char *text, int maxLineWidth, int fontSize) {
@@ -200,8 +269,7 @@ void InteractWithNPC(NPC* npc, Character* player) {
         GenerateGeminiDialog(npc->name, npc->questItem, activeDialogText, sizeof(activeDialogText));
     }
     
-    WrapText(activeDialogText, 560, 20); // 560 max width, 20 font size
-    isDialogOpen = true;
+    OpenDialogForNPC(activeNPCName, activeDialogText, true);
 }
 
 // Collision mask data for one scene (pixels + dimensions).
@@ -327,6 +395,7 @@ int main(void)
             if (isDialogOpen) {
                 Rectangle okBtn = { SCREEN_WIDTH / 2.0f - 50, SCREEN_HEIGHT / 2.0f + 60, 100, 40 };
                 if (CheckCollisionPointRec(mouseScreenPos, okBtn)) {
+                    StopDialogVoicePlayback();
                     isDialogOpen = false;
                 }
             } else {
@@ -345,12 +414,15 @@ int main(void)
                     isDialogOpen  = true;
 
                     if (clickedNPC->questCompleted) {
-                        snprintf(activeDialogText, sizeof(activeDialogText),
-                                 "Much obliged for your help earlier, partner!");
+                        OpenDialogForNPC(clickedNPC->name,
+                                         "Much obliged for your help earlier, partner!",
+                                         true);
                     } else if (player.heldItem != NULL &&
                                strcmp(player.heldItem, clickedNPC->questItem) == 0) {
-                        snprintf(activeDialogText, sizeof(activeDialogText),
+                        char foundItemDialog[256];
+                        snprintf(foundItemDialog, sizeof(foundItemDialog),
                                  "Well I'll be! You found my %s. Thank ye kindly!", clickedNPC->questItem);
+                        OpenDialogForNPC(clickedNPC->name, foundItemDialog, true);
                         clickedNPC->questCompleted = true;
                         player.heldItem = NULL;
                     } else {
@@ -479,7 +551,7 @@ int main(void)
         if (isWaitingForAI && interactingNPC != NULL) {
             GenerateGeminiDialog(interactingNPC->name, interactingNPC->questItem,
                                  activeDialogText, sizeof(activeDialogText));
-            WrapText(activeDialogText, 560, 20);
+            OpenDialogForNPC(interactingNPC->name, activeDialogText, true);
             isWaitingForAI = false;
             interactingNPC = NULL;
         }
@@ -503,6 +575,10 @@ int main(void)
         UnloadImage(collisionMaskImage);
     }
     UnloadMusicStream(bgMusic);
+    if (isDialogVoiceLoaded) {
+        StopDialogVoicePlayback();
+        UnloadSound(dialogVoiceSound);
+    }
     CloseAudioDevice();
     // Free main-town mask
     if (collisionMaskPixels != NULL) UnloadImageColors(collisionMaskPixels);

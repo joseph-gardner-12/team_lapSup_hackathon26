@@ -46,8 +46,6 @@ CHARACTER_DATA = {
         "personality": "Strict, keeps the Sheriff in line, sharp-tongued but cares for the town."    }
 }
 
-# --- PASTE YOUR GEMINI API KEY HERE ---
-API_KEY = "AIzaSyB9n2bH7oSaC-s-dU9hks-pFt4E2_vRuA8"
 
 def main():
     if len(sys.argv) < 3:
