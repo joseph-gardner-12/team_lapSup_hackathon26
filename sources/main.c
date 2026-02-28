@@ -389,6 +389,7 @@ int main(void)
             if (isDialogOpen) {
                 Rectangle okBtn = { SCREEN_WIDTH / 2.0f - 50, SCREEN_HEIGHT / 2.0f + 60, 100, 40 };
                 if (CheckCollisionPointRec(mouseScreenPos, okBtn)) {
+                    StopDialogVoicePlayback();
                     isDialogOpen = false;
                 }
             } else {
