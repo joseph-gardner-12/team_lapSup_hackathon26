@@ -1,6 +1,7 @@
 #!/bin/sh
 
-read -p "API Key: " api_key
+read -p "Gemini API Key: " gemini_api_key
+read -p "ElevenLabs API Key: " elevenlabs_api_key
 
 echo "Checking python dependencies"
 
@@ -15,12 +16,12 @@ mkdir build
 cd build
 
 touch .env
-echo "GEMINI_API_KEY='${api_key}'" > .env
+echo "GEMINI_API_KEY='${gemini_api_key}'" > .env
+echo "ELEVENLABS_API_KEY='${elevenlabs_api_key}'" >> .env
 
 cmake ..
 cmake --build .
 cp -r ../assets .
 
 mv ./assets/gemini_dialog.py .
-
 
